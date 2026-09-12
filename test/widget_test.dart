@@ -202,5 +202,35 @@ void main() {
     // Flush timers
     await tester.pump(const Duration(seconds: 6));
   });
+
+  testWidgets('renders Huddle cross-department collaboration and handoffs', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const GwdClubApp());
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Tap Huddle in dock
+    expect(find.text('Huddle'), findsOneWidget);
+    await tester.tap(find.text('Huddle'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Verify Huddle Page elements
+    expect(find.text('Huddle'), findsWidgets);
+    expect(find.text('Work crossing between departments'), findsOneWidget);
+    expect(find.text('Request'), findsOneWidget);
+    expect(find.text('Activity'), findsOneWidget);
+
+    // Switch to Activity sub-tab
+    await tester.tap(find.text('Activity'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Flush timers
+    await tester.pump(const Duration(seconds: 6));
+  });
 }
 

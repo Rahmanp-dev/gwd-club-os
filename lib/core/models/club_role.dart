@@ -19,8 +19,8 @@ extension ClubRoleDetails on ClubRole {
   String get keyName => name;
 
   String get title => switch (this) {
-        ClubRole.gwdCeo => 'GWD Global CEO & Founder',
-        ClubRole.gwdCmo => 'GWD Global CMO & Club Supervisor',
+        ClubRole.gwdCeo => 'GWD Global CEO · Club Supervisor',
+        ClubRole.gwdCmo => 'GWD Global CMO · Club Supervisor',
         ClubRole.president => 'President',
         ClubRole.vicePresident => 'Vice President',
         ClubRole.generalSecretary => 'General Secretary',
@@ -28,7 +28,7 @@ extension ClubRoleDetails on ClubRole {
         ClubRole.prLead => 'PR & Corporate Outreach Lead',
         ClubRole.eventManagementLead => 'Event Management Lead',
         ClubRole.creativeLead => 'Creative Lead',
-        ClubRole.productionLead => 'Production & Tech Lead (CEO - Temp)',
+        ClubRole.productionLead => 'Production & AV Tech Lead',
         ClubRole.cinematographerLead => 'Cinematographer & Media Lead',
         ClubRole.clubMember => 'Department Member / Crew',
       };
@@ -43,7 +43,7 @@ extension ClubRoleDetails on ClubRole {
         ClubRole.prLead => 'PR LEAD',
         ClubRole.eventManagementLead => 'EVENT LEAD',
         ClubRole.creativeLead => 'CREATIVE',
-        ClubRole.productionLead => 'PROD (CEO)',
+        ClubRole.productionLead => 'PRODUCTION',
         ClubRole.cinematographerLead => 'CINEMA LEAD',
         ClubRole.clubMember => 'MEMBER',
       };
@@ -58,7 +58,7 @@ extension ClubRoleDetails on ClubRole {
         ClubRole.prLead => 'Tuba Azeem',
         ClubRole.eventManagementLead => 'Bhavya',
         ClubRole.creativeLead => 'Nishta',
-        ClubRole.productionLead => 'Mohd Abdul Rahman Pasha (CEO - Temp)',
+        ClubRole.productionLead => 'Rahman Pasha',
         ClubRole.cinematographerLead => 'Burhan',
         ClubRole.clubMember => 'Club Member',
       };

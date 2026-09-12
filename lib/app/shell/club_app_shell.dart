@@ -5,7 +5,6 @@ import '../../core/models/club_event.dart';
 import '../../core/models/club_task.dart';
 import '../../core/models/department.dart';
 import '../../core/services/club_workspace_service.dart';
-import '../../features/auth/auth_page.dart';
 import '../../features/calendar/calendar_page.dart';
 import '../../features/dashboard/dashboard_page.dart';
 import '../../features/events/ai_event_generator_sheet.dart';
@@ -16,7 +15,9 @@ import '../../features/tasks/tasks_board_page.dart';
 import '../../features/team/team_hierarchy_page.dart';
 import '../theme/apple_motion.dart';
 import '../theme/gwd_theme.dart';
-import '../widgets/apple_dynamic_island.dart';
+import '../widgets/alert_island.dart';
+import '../../features/auth/sign_in_page.dart';
+import '../../features/collaboration/huddle_page.dart';
 import '../../features/landing/club_web_landing_page.dart';
 
 class ClubAppShell extends StatefulWidget {
@@ -108,6 +109,7 @@ class _ClubAppShellState extends State<ClubAppShell> {
         onAcceptTask: (taskId) {
           widget.workspaceService.updateTaskStatus(taskId, TaskStatus.committed);
         },
+        workspace: widget.workspaceService,
       ),
     );
   }
@@ -117,10 +119,12 @@ class _ClubAppShellState extends State<ClubAppShell> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => AuthPage(
+      builder: (context) => SignInPage(
         members: widget.workspaceService.members,
-        onLoginAsRole: (role) {
-          widget.workspaceService.switchRole(role);
+        currentMemberId: widget.workspaceService.currentMember?.id,
+        isSwitching: true,
+        onSignIn: (memberId) {
+          widget.workspaceService.signInAs(memberId);
           Navigator.of(context).pop();
         },
       ),
@@ -215,6 +219,15 @@ class _ClubAppShellState extends State<ClubAppShell> {
             onAcceptTask: (id) => service.updateTaskStatus(id, TaskStatus.committed),
             onCreateTask: service.addTask,
           ),
+          HuddlePage(
+            workspace: service,
+            onOpenTask: (taskId) {
+              final task = service.tasks.where((t) => t.id == taskId).firstOrNull;
+              if (task != null) {
+                _showTaskDetail(task);
+              }
+            },
+          ),
           CalendarPage(
             events: service.events,
             tasks: service.tasks,
@@ -239,8 +252,19 @@ class _ClubAppShellState extends State<ClubAppShell> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: AppleDynamicIsland(
-                  workspaceService: service,
+                child: AlertIsland(
+                  workspace: service,
+                  onOpenFeed: () {
+                    setState(() {
+                      _currentIndex = 3;
+                    });
+                  },
+                  onOpenTask: (taskId) {
+                    final task = service.tasks.where((t) => t.id == taskId).firstOrNull;
+                    if (task != null) {
+                      _showTaskDetail(task);
+                    }
+                  },
                 ),
               ),
             ],
@@ -249,6 +273,7 @@ class _ClubAppShellState extends State<ClubAppShell> {
             currentIndex: _currentIndex,
             pendingVerifications: pendingVerificationCount,
             blockedCount: blockedCount,
+            awaitingHandoffs: service.handoffsAwaitingMe.length,
             eventCount: service.events.length,
             onSelect: (index) {
               setState(() {
@@ -266,6 +291,7 @@ class _ClubAppShellState extends State<ClubAppShell> {
     required int currentIndex,
     required int pendingVerifications,
     required int blockedCount,
+    required int awaitingHandoffs,
     required int eventCount,
     required void Function(int) onSelect,
   }) {
@@ -273,6 +299,7 @@ class _ClubAppShellState extends State<ClubAppShell> {
       const _DockItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Command'),
       _DockItem(Icons.event_outlined, Icons.event_rounded, 'Events', badgeCount: eventCount, badgeColor: GwdColors.primaryRed),
       _DockItem(Icons.task_alt_outlined, Icons.task_alt_rounded, 'Tasks', badgeCount: pendingVerifications, badgeColor: GwdColors.primaryRed),
+      _DockItem(Icons.forum_outlined, Icons.forum_rounded, 'Huddle', badgeCount: awaitingHandoffs, badgeColor: GwdColors.primaryRed),
       _DockItem(Icons.calendar_today_outlined, Icons.calendar_month_rounded, 'Calendar', badgeCount: blockedCount, badgeColor: GwdColors.primaryRed),
       const _DockItem(Icons.account_tree_outlined, Icons.account_tree_rounded, 'Hierarchy'),
     ];

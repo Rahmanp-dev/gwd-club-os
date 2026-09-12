@@ -1,124 +1,517 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/club_event.dart';
 import '../models/club_role.dart';
 import '../models/club_task.dart';
+import '../models/collaboration.dart';
 import '../models/department.dart';
 import '../models/member_profile.dart';
 import 'ai_event_architect.dart';
+import 'seed_workspace.dart';
+
+/// ---------------------------------------------------------------------------
+/// CLUB WORKSPACE
+///
+/// Single source of truth for the whole app. Three things changed here from the
+/// original in-memory prototype:
+///
+///  1. **There is a person.** [currentMember] is who is signed in on this
+///     device. Every derived list below is computed for that person, which is
+///     what makes one member's home screen genuinely different from another's.
+///  2. **State survives.** The workspace is serialised to device storage on
+///     every mutation, so closing the app (or refreshing the web build) no
+///     longer wipes the club's work.
+///  3. **Noise is graded.** Mutations emit typed [ActivityEvent]s carrying a
+///     severity. Only the ones that clear the bar reach [latestAlert].
+/// ---------------------------------------------------------------------------
 
 class ClubWorkspaceService extends ChangeNotifier {
   ClubWorkspaceService() {
-    _bootstrapSeedData();
+    final seed = SeedWorkspace.build();
+    _events = List.of(seed.events);
+    _tasks = List.of(seed.tasks);
+    _members = List.of(seed.members);
+    _handoffs = List.of(seed.handoffs);
+    _messages = List.of(seed.messages);
+    _activity = List.of(seed.activity);
+    _currentMember = _members.where((m) => m.role == ClubRole.president).firstOrNull ??
+        _members.firstOrNull;
   }
 
-  ClubRole _activeRole = ClubRole.president;
-  ClubRole get activeRole => _activeRole;
+  static const _storageKey = 'gwd_club_os_workspace_v2';
+  static const _sessionKey = 'gwd_club_os_session_v2';
 
-  List<ClubEvent> _events = [];
+  late List<ClubEvent> _events;
+  late List<ClubTask> _tasks;
+  late List<MemberProfile> _members;
+  late List<Handoff> _handoffs;
+  late List<CollabMessage> _messages;
+  late List<ActivityEvent> _activity;
+
+  MemberProfile? _currentMember;
+  ActivityEvent? _latestAlert;
+  bool _restored = false;
+  Timer? _saveDebounce;
+
+  // --- Identity -----------------------------------------------------------
+
+  /// The person using this device. Null until someone signs in.
+  MemberProfile? get currentMember => _currentMember;
+
+  bool get isSignedIn => _currentMember != null;
+
+  /// Whose lens the app is rendered through. Falls back to a plain member view
+  /// so nothing can accidentally render an executive surface while signed out.
+  ClubRole get activeRole => _currentMember?.role ?? ClubRole.clubMember;
+
+  String? get currentMemberId => _currentMember?.id;
+
+  void signInAs(String memberId) {
+    final member = _members.where((m) => m.id == memberId).firstOrNull;
+    if (member == null) return;
+    _currentMember = member;
+    _record(
+      kind: ActivityKind.sessionChanged,
+      title: 'Signed in',
+      body: '${member.name} opened ${member.role.title}.',
+      actor: member,
+    );
+    _persistSession();
+    _persist();
+    notifyListeners();
+  }
+
+  void signOut() {
+    _currentMember = null;
+    _latestAlert = null;
+    _persistSession();
+    notifyListeners();
+  }
+
+  /// Kept so the existing role simulator (executives previewing another desk)
+  /// keeps working. It swaps to the canonical member holding that role.
+  void switchRole(ClubRole newRole) {
+    final member = _members.where((m) => m.role == newRole).firstOrNull;
+    if (member != null) {
+      signInAs(member.id);
+      return;
+    }
+    _currentMember = _currentMember?.copyWith(role: newRole);
+    notifyListeners();
+  }
+
+  // --- Collections --------------------------------------------------------
+
   List<ClubEvent> get events => List.unmodifiable(_events);
-
-  List<ClubTask> _tasks = [];
   List<ClubTask> get tasks => List.unmodifiable(_tasks);
-
-  List<MemberProfile> _members = [];
   List<MemberProfile> get members => List.unmodifiable(_members);
+  List<Handoff> get handoffs => List.unmodifiable(_handoffs);
+  List<ActivityEvent> get activity => List.unmodifiable(_activity);
 
-  final List<String> _notifications = [];
-  List<String> get notifications => List.unmodifiable(_notifications);
+  /// Plain-text feed retained for the older widgets that render strings.
+  List<String> get notifications =>
+      _activity.map((e) => e.body).toList(growable: false);
 
-  ClubLiveNotification? _latestAlert;
-  ClubLiveNotification? get latestAlert => _latestAlert;
+  ClubEvent? get flagshipEvent =>
+      _events.where((e) => e.isFlagship).firstOrNull ?? _events.firstOrNull;
+
+  ClubEvent? eventById(String? id) =>
+      id == null ? null : _events.where((e) => e.id == id).firstOrNull;
+
+  MemberProfile? memberById(String? id) =>
+      id == null ? null : _members.where((m) => m.id == id).firstOrNull;
+
+  MemberProfile? memberByName(String name) =>
+      _members.where((m) => m.name == name).firstOrNull;
+
+  /// Everyone who sits in a department, lead first.
+  List<MemberProfile> membersOf(DepartmentType department) {
+    final list = _members.where((m) => m.department == department).toList();
+    list.sort((a, b) {
+      final aLead = a.role == department.leadRole ? 0 : 1;
+      final bLead = b.role == department.leadRole ? 0 : 1;
+      if (aLead != bLead) return aLead.compareTo(bLead);
+      return b.totalVerifiedPoints.compareTo(a.totalVerifiedPoints);
+    });
+    return list;
+  }
+
+  // --- Alerts -------------------------------------------------------------
+
+  /// The one event currently allowed to take over the Dynamic Island.
+  ActivityEvent? get latestAlert => _latestAlert;
 
   void dismissAlert() {
     _latestAlert = null;
     notifyListeners();
   }
 
-  void switchRole(ClubRole newRole) {
-    if (_activeRole == newRole) return;
-    _activeRole = newRole;
-    _pushNotification('Switched command profile to ${newRole.title}', title: 'PROFILE SWITCHED', type: 'role');
+  int get unreadActivityCount => _activity.where((e) => !e.read).length;
+
+  void markActivityRead() {
+    if (_activity.every((e) => e.read)) return;
+    _activity = _activity.map((e) => e.copyWith(read: true)).toList();
+    _persist();
     notifyListeners();
   }
 
-  List<ClubTask> get tasksForActiveRole {
-    return _tasks.where((t) {
-      if (_activeRole.isExecutive) return true; // Executive sees all
-      if (t.assigneeRole == _activeRole) return true;
-      // If active role is a Lead, show all tasks in their department
-      if (_activeRole == ClubRole.marketingLead && t.department == DepartmentType.marketing) return true;
-      if (_activeRole == ClubRole.prLead && t.department == DepartmentType.publicRelations) return true;
-      if (_activeRole == ClubRole.eventManagementLead && t.department == DepartmentType.eventManagement) return true;
-      if (_activeRole == ClubRole.creativeLead && t.department == DepartmentType.creative) return true;
-      if (_activeRole == ClubRole.productionLead && t.department == DepartmentType.production) return true;
-      if (_activeRole == ClubRole.cinematographerLead && t.department == DepartmentType.cinematography) return true;
+  /// Feed entries relevant to a member: club-wide events plus anything
+  /// addressed to them or touching their department.
+  List<ActivityEvent> activityFor(MemberProfile? member) {
+    if (member == null) return activity;
+    return _activity.where((e) {
+      if (e.targetMemberIds.contains(member.id)) return true;
+      if (e.actorId == member.id) return true;
+      if (e.department != null && e.department == member.department) return true;
+      return e.severity != ActivitySeverity.ambient;
+    }).toList();
+  }
+
+  // --- Task views for the signed-in person --------------------------------
+
+  /// Work this person personally owns.
+  List<ClubTask> get myTasks {
+    final me = _currentMember;
+    if (me == null) return const [];
+    return _tasks
+        .where((t) => t.assigneeName == me.name || t.assigneeRole == me.role)
+        .toList();
+  }
+
+  /// The single most important list in the app: everything waiting on this
+  /// person right now, ordered by how much it is holding others up.
+  List<ClubTask> get myInbox {
+    final me = _currentMember;
+    if (me == null) return const [];
+
+    final items = _tasks.where((t) {
+      final mine = t.assigneeName == me.name || t.assigneeRole == me.role;
+      // Something I own that has not been handed in yet.
+      if (mine &&
+          (t.status == TaskStatus.requested ||
+              t.status == TaskStatus.inProgress ||
+              t.status == TaskStatus.committed ||
+              t.status == TaskStatus.blocked)) {
+        return true;
+      }
+      // Something handed in that I am the one who has to verify.
+      if (t.status == TaskStatus.submitted && canVerify(t, me)) return true;
       return false;
     }).toList();
+
+    items.sort((a, b) {
+      final aRank = _inboxRank(a);
+      final bRank = _inboxRank(b);
+      if (aRank != bRank) return aRank.compareTo(bRank);
+      return a.dueDate.compareTo(b.dueDate);
+    });
+    return items;
+  }
+
+  int _inboxRank(ClubTask task) => switch (task.status) {
+        TaskStatus.blocked => 0,
+        TaskStatus.submitted => 1,
+        TaskStatus.requested => 2,
+        TaskStatus.inProgress => 3,
+        TaskStatus.committed => 4,
+        TaskStatus.verified => 5,
+      };
+
+  /// Whether [member] is allowed to sign off [task].
+  bool canVerify(ClubTask task, MemberProfile? member) {
+    if (member == null) return false;
+    if (member.role.isExecutive) return true;
+    if (!member.role.canVerifyTasks) return false;
+    return task.department == member.department;
+  }
+
+  List<ClubTask> get tasksForActiveRole {
+    final me = _currentMember;
+    if (me == null) return tasks;
+    if (me.role.isExecutive) return tasks;
+    return _tasks
+        .where((t) =>
+            t.department == me.department ||
+            t.assigneeName == me.name ||
+            t.assigneeRole == me.role)
+        .toList();
   }
 
   List<ClubTask> get pendingVerificationsForActiveRole {
-    return _tasks.where((t) {
-      if (t.status != TaskStatus.submitted) return false;
-      if (_activeRole.isExecutive) return true; // Executives can verify any submission
-      if (_activeRole == ClubRole.marketingLead && t.department == DepartmentType.marketing) return true;
-      if (_activeRole == ClubRole.prLead && t.department == DepartmentType.publicRelations) return true;
-      if (_activeRole == ClubRole.eventManagementLead && t.department == DepartmentType.eventManagement) return true;
-      if (_activeRole == ClubRole.creativeLead && t.department == DepartmentType.creative) return true;
-      if (_activeRole == ClubRole.productionLead && t.department == DepartmentType.production) return true;
-      if (_activeRole == ClubRole.cinematographerLead && t.department == DepartmentType.cinematography) return true;
-      return false;
-    }).toList();
-  }
-
-  List<ClubTask> get blockedTasks {
-    return _tasks.where((t) => t.status == TaskStatus.blocked).toList();
-  }
-
-  int get totalVerifiedPoints {
+    final me = _currentMember;
     return _tasks
-        .where((t) => t.status == TaskStatus.verified)
-        .fold(0, (sum, t) => sum + t.points);
+        .where((t) => t.status == TaskStatus.submitted && canVerify(t, me))
+        .toList();
   }
 
-  int get totalCommittedPoints {
+  List<ClubTask> get blockedTasks =>
+      _tasks.where((t) => t.status == TaskStatus.blocked).toList();
+
+  /// Work my department is holding up for somebody else. This is the number a
+  /// lead should feel responsible for.
+  List<ClubTask> get tasksMyDepartmentIsBlocking {
+    final me = _currentMember;
+    if (me == null) return const [];
     return _tasks
-        .where((t) => t.status != TaskStatus.requested)
-        .fold(0, (sum, t) => sum + t.points);
+        .where((t) =>
+            t.status == TaskStatus.blocked &&
+            t.blockedByDepartment == me.department)
+        .toList();
   }
 
-  int getDepartmentVerifiedPoints(DepartmentType department) {
-    return _tasks
-        .where((t) => t.department == department && t.status == TaskStatus.verified)
-        .fold(0, (sum, t) => sum + t.points);
+  // --- Scores -------------------------------------------------------------
+
+  int get totalVerifiedPoints => _tasks
+      .where((t) => t.status == TaskStatus.verified)
+      .fold(0, (sum, t) => sum + t.points);
+
+  int get totalCommittedPoints => _tasks
+      .where((t) => t.status != TaskStatus.requested)
+      .fold(0, (sum, t) => sum + t.points);
+
+  int getDepartmentVerifiedPoints(DepartmentType department) => _tasks
+      .where((t) => t.department == department && t.status == TaskStatus.verified)
+      .fold(0, (sum, t) => sum + t.points);
+
+  int getDepartmentTotalPoints(DepartmentType department) => _tasks
+      .where((t) => t.department == department)
+      .fold(0, (sum, t) => sum + t.points);
+
+  /// Share of a department's committed work that has been signed off, 0..1.
+  double departmentProgress(DepartmentType department) {
+    final total = getDepartmentTotalPoints(department);
+    if (total == 0) return 0;
+    return getDepartmentVerifiedPoints(department) / total;
   }
 
-  int getDepartmentTotalPoints(DepartmentType department) {
-    return _tasks
-        .where((t) => t.department == department)
-        .fold(0, (sum, t) => sum + t.points);
+  /// Club-wide delivery rate, 0..1.
+  double get clubProgress {
+    if (_tasks.isEmpty) return 0;
+    final verified = _tasks.where((t) => t.status == TaskStatus.verified).length;
+    return verified / _tasks.length;
   }
 
-  // --- ACTIONS ---
+  // --- Threads ------------------------------------------------------------
+
+  List<CollabMessage> messagesFor(String taskId) {
+    final list = _messages.where((m) => m.taskId == taskId).toList();
+    list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return list;
+  }
+
+  int messageCountFor(String taskId) =>
+      _messages.where((m) => m.taskId == taskId).length;
+
+  /// Posts to a deliverable's thread. Names written as @First are resolved to
+  /// members and notified personally.
+  void postMessage(String taskId, String body, {bool isDecision = false}) {
+    final me = _currentMember;
+    if (me == null || body.trim().isEmpty) return;
+
+    final mentioned = _resolveMentions(body);
+    final message = CollabMessage(
+      id: _newId('msg'),
+      taskId: taskId,
+      authorId: me.id,
+      authorName: me.name,
+      authorRole: me.role,
+      body: body.trim(),
+      createdAt: DateTime.now(),
+      mentions: mentioned.map((m) => m.id).toList(),
+      isDecision: isDecision,
+    );
+    _messages = [..._messages, message];
+
+    final task = _tasks.where((t) => t.id == taskId).firstOrNull;
+    final owner = task == null ? null : memberByName(task.assigneeName);
+    final targets = <String>{
+      ...mentioned.map((m) => m.id),
+      if (owner != null && owner.id != me.id) owner.id,
+    }.toList();
+
+    _record(
+      kind: mentioned.isEmpty ? ActivityKind.comment : ActivityKind.mention,
+      title: mentioned.isEmpty ? 'New comment' : 'You were mentioned',
+      body: '${me.name}: ${body.trim()}',
+      actor: me,
+      targetMemberIds: targets,
+      taskId: taskId,
+      department: task?.department,
+    );
+    _persist();
+    notifyListeners();
+  }
+
+  List<MemberProfile> _resolveMentions(String body) {
+    final matches = RegExp(r'@([A-Za-z][A-Za-z.\-]*)').allMatches(body);
+    final found = <MemberProfile>{};
+    for (final match in matches) {
+      final handle = match.group(1)!.toLowerCase();
+      for (final member in _members) {
+        final first = member.name.split(' ').first.toLowerCase();
+        if (first == handle) found.add(member);
+      }
+    }
+    return found.toList();
+  }
+
+  // --- Handoffs -----------------------------------------------------------
+
+  List<Handoff> get openHandoffs => _handoffs.where((h) => h.isOpen).toList();
+
+  /// Handoffs this person is expected to act on — requests pointed at their
+  /// department that nobody has answered yet.
+  List<Handoff> get handoffsAwaitingMe {
+    final me = _currentMember;
+    if (me == null) return const [];
+    return _handoffs
+        .where((h) =>
+            h.status == HandoffStatus.requested && h.toDepartment == me.department)
+        .toList();
+  }
+
+  /// Handoffs this person raised and is still waiting on.
+  List<Handoff> get handoffsIAmWaitingOn {
+    final me = _currentMember;
+    if (me == null) return const [];
+    return _handoffs
+        .where((h) => h.isOpen && h.requestedById == me.id)
+        .toList();
+  }
+
+  List<Handoff> handoffsForDepartment(DepartmentType department) => _handoffs
+      .where((h) =>
+          h.toDepartment == department || h.fromDepartment == department)
+      .toList();
+
+  void requestHandoff({
+    required String title,
+    required String need,
+    required DepartmentType toDepartment,
+    required DateTime neededBy,
+    String? taskId,
+  }) {
+    final me = _currentMember;
+    if (me == null) return;
+
+    final handoff = Handoff(
+      id: _newId('ho'),
+      title: title,
+      need: need,
+      fromDepartment: me.department,
+      toDepartment: toDepartment,
+      requestedById: me.id,
+      requestedByName: me.name,
+      createdAt: DateTime.now(),
+      neededBy: neededBy,
+      taskId: taskId,
+    );
+    _handoffs = [handoff, ..._handoffs];
+
+    _record(
+      kind: ActivityKind.handoffRequested,
+      title: 'Handoff requested',
+      body:
+          '${me.department.shortName} needs "$title" from ${toDepartment.shortName} by ${_shortDate(neededBy)}.',
+      actor: me,
+      targetMemberIds: membersOf(toDepartment).map((m) => m.id).toList(),
+      department: toDepartment,
+      handoffId: handoff.id,
+      taskId: taskId,
+    );
+    _persist();
+    notifyListeners();
+  }
+
+  void respondToHandoff(String handoffId, HandoffStatus status, {String? note}) {
+    final index = _handoffs.indexWhere((h) => h.id == handoffId);
+    if (index == -1) return;
+    final me = _currentMember;
+    final handoff = _handoffs[index];
+
+    _handoffs[index] = handoff.copyWith(
+      status: status,
+      respondedById: me?.id,
+      respondedByName: me?.name,
+      respondedAt: DateTime.now(),
+      responseNote: note,
+    );
+    _handoffs = List.of(_handoffs);
+
+    final kind = switch (status) {
+      HandoffStatus.accepted => ActivityKind.handoffAccepted,
+      HandoffStatus.delivered => ActivityKind.handoffDelivered,
+      HandoffStatus.declined => ActivityKind.handoffDeclined,
+      HandoffStatus.requested => ActivityKind.handoffRequested,
+    };
+
+    _record(
+      kind: kind,
+      title: 'Handoff ${status.name}',
+      body:
+          '${me?.name ?? handoff.toDepartment.shortName} marked "${handoff.title}" as ${status.label.toLowerCase()}.',
+      actor: me,
+      targetMemberIds: [handoff.requestedById],
+      department: handoff.fromDepartment,
+      handoffId: handoff.id,
+      taskId: handoff.taskId,
+    );
+    _persist();
+    notifyListeners();
+  }
+
+  // --- Task lifecycle -----------------------------------------------------
 
   void addEvent(ClubEvent event) {
-    _events.insert(0, event);
+    _events = [event, ..._events];
+    _record(
+      kind: ActivityKind.eventCreated,
+      title: 'Event created',
+      body: '${event.title} is on the calendar for ${event.formattedDate}.',
+      actor: _currentMember,
+    );
+    _persist();
     notifyListeners();
   }
 
   void addTask(ClubTask task) {
-    _tasks.insert(0, task);
-    _pushNotification(
-      'New assignment: "${task.title}" allocated to ${task.assigneeRole.title}',
-      title: 'TASK DISPATCHED',
-      type: 'assignment',
+    _tasks = [task, ..._tasks];
+    final owner = memberByName(task.assigneeName);
+    _record(
+      kind: ActivityKind.taskAssigned,
+      title: 'New assignment',
+      body: '"${task.title}" went to ${task.assigneeName}.',
+      actor: _currentMember,
+      targetMemberIds: [if (owner != null) owner.id],
+      taskId: task.id,
+      department: task.department,
     );
+    _persist();
     notifyListeners();
   }
 
   void updateTaskStatus(String taskId, TaskStatus newStatus) {
     final index = _tasks.indexWhere((t) => t.id == taskId);
     if (index == -1) return;
-    _tasks[index] = _tasks[index].copyWith(status: newStatus);
+    final task = _tasks[index];
+    _tasks[index] = task.copyWith(status: newStatus);
+    _tasks = List.of(_tasks);
+
+    if (newStatus == TaskStatus.committed) {
+      _record(
+        kind: ActivityKind.taskAccepted,
+        title: 'Commitment made',
+        body: '${task.assigneeName} accepted "${task.title}".',
+        actor: _currentMember,
+        taskId: taskId,
+        department: task.department,
+      );
+    }
+    _persist();
     notifyListeners();
   }
 
@@ -131,11 +524,25 @@ class ClubWorkspaceService extends ChangeNotifier {
       blocker: null,
       blockedByDepartment: null,
     );
-    _pushNotification(
-      'Proof submitted for "${_tasks[index].title}". Ready for Lead verification.',
-      title: 'PROOF SUBMITTED',
-      type: 'proof',
+    _tasks = List.of(_tasks);
+    final task = _tasks[index];
+
+    // Whoever has to sign this off is the one who needs to know.
+    final verifiers = _members
+        .where((m) => canVerify(task, m))
+        .map((m) => m.id)
+        .toList();
+
+    _record(
+      kind: ActivityKind.proofSubmitted,
+      title: 'Proof submitted',
+      body: '"${task.title}" is ready for sign-off.',
+      actor: _currentMember,
+      targetMemberIds: verifiers,
+      taskId: taskId,
+      department: task.department,
     );
+    _persist();
     notifyListeners();
   }
 
@@ -148,16 +555,26 @@ class ClubWorkspaceService extends ChangeNotifier {
       verifiedByRole: verifierRole,
       verifiedByName: verifierName,
     );
-    _awardPointsToMember(task.assigneeName, task.points, task.corporateValueSkill);
-    _pushNotification(
-      'Verified: "${task.title}" (+${task.points} Corporate XP to ${task.assigneeName})',
-      title: 'TASK VERIFIED · XP AWARDED',
-      type: 'verification',
+    _tasks = List.of(_tasks);
+    _awardPoints(task.assigneeName, task.points, task.corporateValueSkill);
+
+    final owner = memberByName(task.assigneeName);
+    _record(
+      kind: ActivityKind.taskVerified,
+      title: 'Outcome verified',
+      body:
+          '"${task.title}" signed off by $verifierName · +${task.points} XP to ${task.assigneeName}.',
+      actor: _currentMember,
+      targetMemberIds: [if (owner != null) owner.id],
+      taskId: taskId,
+      department: task.department,
     );
+    _persist();
     notifyListeners();
   }
 
-  void reportBlocker(String taskId, String blockerReason, DepartmentType? blockedBy) {
+  void reportBlocker(
+      String taskId, String blockerReason, DepartmentType? blockedBy) {
     final index = _tasks.indexWhere((t) => t.id == taskId);
     if (index == -1) return;
     _tasks[index] = _tasks[index].copyWith(
@@ -165,36 +582,61 @@ class ClubWorkspaceService extends ChangeNotifier {
       blocker: blockerReason,
       blockedByDepartment: blockedBy,
     );
-    _pushNotification(
-      'Blocker on "${_tasks[index].title}": $blockerReason',
-      title: '🚨 CRITICAL BLOCKER ESCALATED',
-      type: 'blocker',
+    _tasks = List.of(_tasks);
+    final task = _tasks[index];
+
+    _record(
+      kind: ActivityKind.blockerRaised,
+      title: 'Blocker raised',
+      body: blockedBy == null
+          ? '"${task.title}" is blocked: $blockerReason'
+          : '${blockedBy.shortName} is blocking "${task.title}": $blockerReason',
+      actor: _currentMember,
+      targetMemberIds:
+          blockedBy == null ? const [] : membersOf(blockedBy).map((m) => m.id).toList(),
+      taskId: taskId,
+      department: blockedBy ?? task.department,
     );
+    _persist();
     notifyListeners();
   }
 
   void resolveBlocker(String taskId) {
     final index = _tasks.indexWhere((t) => t.id == taskId);
     if (index == -1) return;
+    final wasBlockedBy = _tasks[index].blockedByDepartment;
     _tasks[index] = _tasks[index].copyWith(
       status: TaskStatus.inProgress,
       blocker: null,
       blockedByDepartment: null,
     );
-    _pushNotification(
-      'Blocker cleared on "${_tasks[index].title}". Workflow resumed.',
-      title: '✅ BLOCKER RESOLVED',
-      type: 'resolved',
+    _tasks = List.of(_tasks);
+    final task = _tasks[index];
+    final owner = memberByName(task.assigneeName);
+
+    _record(
+      kind: ActivityKind.blockerCleared,
+      title: 'Blocker cleared',
+      body: '"${task.title}" is moving again.',
+      actor: _currentMember,
+      targetMemberIds: [if (owner != null) owner.id],
+      taskId: taskId,
+      department: wasBlockedBy ?? task.department,
     );
+    _persist();
     notifyListeners();
   }
 
   void nudgeDepartment(DepartmentType department, String reason) {
-    _pushNotification(
-      'Nudge dispatched to ${department.displayName}: "$reason"',
-      title: 'OPERATIONAL NUDGE',
-      type: 'nudge',
+    _record(
+      kind: ActivityKind.nudge,
+      title: 'Nudge sent',
+      body: '${department.shortName}: $reason',
+      actor: _currentMember,
+      targetMemberIds: membersOf(department).map((m) => m.id).toList(),
+      department: department,
     );
+    _persist();
     notifyListeners();
   }
 
@@ -205,7 +647,7 @@ class ClubWorkspaceService extends ChangeNotifier {
     required DateTime targetDate,
     required String venue,
     int expectedFootfall = 300,
-    String budgetLabel = '₹50,000 / \$600',
+    String budgetLabel = '₹50,000',
     String? customInstructions,
   }) {
     final blueprint = AiEventArchitectService.generateBlueprint(
@@ -219,462 +661,201 @@ class ClubWorkspaceService extends ChangeNotifier {
       customInstructions: customInstructions,
     );
 
-    _events.insert(0, blueprint.event);
-    _tasks.insertAll(0, blueprint.tasks);
-    _pushNotification('✨ AI Architect synthesized "${blueprint.event.title}" and generated ${blueprint.tasks.length} synchronized department tasks!');
+    _events = [blueprint.event, ..._events];
+    _tasks = [...blueprint.tasks, ..._tasks];
+
+    _record(
+      kind: ActivityKind.eventCreated,
+      title: 'Blueprint generated',
+      body:
+          '"${blueprint.event.title}" created with ${blueprint.tasks.length} department tasks.',
+      actor: _currentMember,
+    );
+    _persist();
     notifyListeners();
   }
 
-  void _pushNotification(
-    String message, {
-    String title = 'CLUB DISPATCH',
-    String type = 'info',
-    String? actionLabel,
-  }) {
-    _notifications.insert(0, message);
-    if (_notifications.length > 25) _notifications.removeLast();
-    _latestAlert = ClubLiveNotification(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: title,
-      message: message,
-      timestamp: DateTime.now(),
-      type: type,
-      actionLabel: actionLabel,
-    );
-  }
+  // --- Internals ----------------------------------------------------------
 
-  void _awardPointsToMember(String memberName, int points, String skillTag) {
+  void _awardPoints(String memberName, int points, String skillTag) {
     final index = _members.indexWhere((m) => m.name == memberName);
     if (index == -1) return;
     final member = _members[index];
-    final updatedSkills = Map<String, int>.from(member.corporateSkillsEarned);
-    updatedSkills[skillTag] = (updatedSkills[skillTag] ?? 0) + points;
-    _members[index] = MemberProfile(
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      department: member.department,
-      yearAndMajor: member.yearAndMajor,
+    final skills = Map<String, int>.from(member.corporateSkillsEarned);
+    skills[skillTag] = (skills[skillTag] ?? 0) + points;
+
+    final updated = member.copyWith(
       totalVerifiedPoints: member.totalVerifiedPoints + points,
-      reliabilityRate: (member.reliabilityRate + 0.5).clamp(80.0, 99.8),
-      badges: member.badges,
-      corporateSkillsEarned: updatedSkills,
+      reliabilityRate: (member.reliabilityRate + 0.4).clamp(80.0, 99.9),
+      corporateSkillsEarned: skills,
     );
+
+    final mutableMembers = List<MemberProfile>.of(_members);
+    mutableMembers[index] = updated;
+    _members = mutableMembers;
+
+    if (_currentMember?.id == member.id) {
+      _currentMember = updated;
+    }
   }
 
-  // --- SEED DATA ---
-  void _bootstrapSeedData() {
-    final now = DateTime.now();
-
-    final flagshipEvent = ClubEvent(
-      id: 'ev-flagship-gwd-2026',
-      title: 'GWD TechConnect 2026: Campus to Corporate Summit',
-      themeTagline: 'Bridging the Gap Between Academic Theory and Industry 4.0 Standards',
-      category: EventCategory.flagship,
-      targetDate: now.add(const Duration(days: 16)),
-      venue: 'Main University Convention Center & Innovation Lab',
-      expectedFootfall: 550,
-      status: EventStatus.inProgress,
-      budgetLabel: '₹85,000 / \$1,020',
-      isFlagship: true,
-      runOfShow: [
-        const EventRunOfShowItem(
-          time: '09:00 AM',
-          title: 'Delegate Registration & GWD Welcome Kits',
-          department: 'Event Logistics & Ops',
-          ownerName: 'Bhavya (Event Lead)',
-          notes: 'Pre-printed badges, QR scanner gates open',
-        ),
-        const EventRunOfShowItem(
-          time: '10:00 AM',
-          title: 'Opening Keynote: GWD Global Leadership',
-          department: 'Executive Board',
-          ownerName: 'Aldrin Paul (President)',
-          notes: 'Keynote deck on main LED wall',
-        ),
-        const EventRunOfShowItem(
-          time: '11:30 AM',
-          title: 'Industry Panel: Corporate Expectations vs Student Readiness',
-          department: 'PR & Corporate Relations',
-          ownerName: 'Tuba Azeem (PR Lead)',
-          notes: 'Panelists from Google Cloud & Tier-1 FinTech',
-        ),
-        const EventRunOfShowItem(
-          time: '01:00 PM',
-          title: 'Keynote & Stage LED Visual Brand Verification',
-          department: 'Creative & Brand Design',
-          ownerName: 'Nishta (Creative Lead)',
-          notes: 'Stage backdrop motion graphics verified and locked',
-        ),
-        const EventRunOfShowItem(
-          time: '02:00 PM',
-          title: 'Breakout Tech Tracks & Live Demos',
-          department: 'Production & AV Tech',
-          ownerName: 'Mohd Abdul Rahman Pasha (CEO - Temp)',
-          notes: 'Hands-on code sprint tracks',
-        ),
-        const EventRunOfShowItem(
-          time: '04:30 PM',
-          title: 'Awards Ceremony & Same-Day Cinematic Aftermovie',
-          department: 'Cinematography & Media',
-          ownerName: 'Burhan (Cinema Lead)',
-          notes: 'Same-day 90s cut played on main screen',
-        ),
-      ],
+  void _record({
+    required ActivityKind kind,
+    required String title,
+    required String body,
+    MemberProfile? actor,
+    List<String> targetMemberIds = const [],
+    String? taskId,
+    String? handoffId,
+    DepartmentType? department,
+  }) {
+    final event = ActivityEvent(
+      id: _newId('act'),
+      kind: kind,
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+      actorId: actor?.id,
+      actorName: actor?.name,
+      targetMemberIds: targetMemberIds,
+      taskId: taskId,
+      handoffId: handoffId,
+      department: department,
     );
 
-    final workshopEvent = ClubEvent(
-      id: 'ev-workshop-genai',
-      title: 'Corporate GenAI & Full-Stack Cloud Architecture Workshop',
-      themeTagline: 'Hands-on Real World Engineering with Production Docker & Vector DBs',
-      category: EventCategory.workshop,
-      targetDate: now.add(const Duration(days: 6)),
-      venue: 'Advanced Engineering Lab 4',
-      expectedFootfall: 140,
-      status: EventStatus.inProgress,
-      budgetLabel: '₹22,000 / \$270',
-      isFlagship: false,
-    );
+    _activity = [event, ..._activity];
+    if (_activity.length > 80) {
+      _activity = _activity.sublist(0, 80);
+    }
 
-    _events = [flagshipEvent, workshopEvent];
+    // The noise gate. An event only takes over the Dynamic Island if it is
+    // critical to the club, or personally addressed to whoever is signed in.
+    // Anything the current user did themselves never interrupts them.
+    final selfAuthored = actor != null && actor.id == _currentMember?.id;
+    if (!selfAuthored && event.interruptsFor(_currentMemberId)) {
+      _latestAlert = event;
+    }
+  }
 
-    _tasks = [
-      // Verified Tasks
-      ClubTask(
-        id: 'task-seed-1',
-        eventId: flagshipEvent.id,
-        title: 'Draft and confirm official College Dean permission & security escort sanction',
-        department: DepartmentType.executive,
-        assigneeRole: ClubRole.generalSecretary,
-        assigneeName: 'Sravya',
-        creatorRole: ClubRole.president,
-        points: 8,
-        dueLabel: 'Completed · Yesterday',
-        dueDate: now.subtract(const Duration(days: 1)),
-        definitionOfDone: 'Signed letter from Dean of Student Affairs uploaded to Drive.',
-        status: TaskStatus.verified,
-        corporateValueSkill: 'Executive Governance & Clearance',
-        proof: 'Signed letter uploaded: gwd.global/drive/perm-dean-techconnect.pdf',
-        verifiedByRole: ClubRole.president,
-        verifiedByName: 'Aldrin Paul',
-      ),
-      ClubTask(
-        id: 'task-seed-2',
-        eventId: flagshipEvent.id,
-        title: 'Pitch and confirm Title Sponsor & 2 Associate Industry Partners',
-        department: DepartmentType.publicRelations,
-        assigneeRole: ClubRole.prLead,
-        assigneeName: 'Tuba Azeem',
-        creatorRole: ClubRole.president,
-        points: 13,
-        dueLabel: 'Completed · 2 days ago',
-        dueDate: now.subtract(const Duration(days: 2)),
-        definitionOfDone: 'Corporate MoUs signed for ₹50,000 sponsorship pool.',
-        status: TaskStatus.verified,
-        corporateValueSkill: 'Corporate Sponsorship Pitching',
-        proof: 'Signed MoU with CloudPartner & TechVentures: gwd.global/pr/mou-2026.pdf',
-        verifiedByRole: ClubRole.president,
-        verifiedByName: 'Aldrin Paul',
-      ),
+  String? get _currentMemberId => _currentMember?.id;
 
-      // Submitted Tasks (Awaiting Verification)
-      ClubTask(
-        id: 'task-seed-3',
-        eventId: flagshipEvent.id,
-        title: 'Edit and export official 60s Cinematic Teaser Reel with sound fx & titles',
-        department: DepartmentType.cinematography,
-        assigneeRole: ClubRole.cinematographerLead,
-        assigneeName: 'Burhan',
-        creatorRole: ClubRole.vicePresident,
-        points: 13,
-        dueLabel: 'Today · 5:00 PM',
-        dueDate: now,
-        definitionOfDone: '4K video file delivered in 9:16 and 16:9 formats with captions.',
-        status: TaskStatus.submitted,
-        corporateValueSkill: 'High-Impact Video Production',
-        proof: 'Draft render on Frame.io: https://frame.io/v/gwd-teaser-v2. MP4 ready.',
-      ),
-      ClubTask(
-        id: 'task-seed-4',
-        eventId: flagshipEvent.id,
-        title: 'Design official GWD TechConnect keynote slide deck, stage visual graphics & badge system',
-        department: DepartmentType.creative,
-        assigneeRole: ClubRole.creativeLead,
-        assigneeName: 'Nishta',
-        creatorRole: ClubRole.gwdCmo,
-        points: 12,
-        dueLabel: 'Today · 4:00 PM',
-        dueDate: now,
-        definitionOfDone: 'Figma package with all keynote 4K templates, stage motion graphics and participant badge designs.',
-        status: TaskStatus.submitted,
-        corporateValueSkill: 'Brand Design Systems & UX',
-        proof: 'Figma workspace: figma.com/file/gwd-techconnect-creative with all keynote templates.',
-      ),
+  String _newId(String prefix) =>
+      '$prefix-${DateTime.now().microsecondsSinceEpoch}';
 
-      // Blocked Task (Cross-department dependency!)
-      ClubTask(
-        id: 'task-seed-5',
-        eventId: flagshipEvent.id,
-        title: 'Finalize multi-camera stage shooting cues & speaker lighting angles',
-        department: DepartmentType.cinematography,
-        assigneeRole: ClubRole.cinematographerLead,
-        assigneeName: 'Burhan',
-        creatorRole: ClubRole.vicePresident,
-        points: 8,
-        dueLabel: 'Tomorrow',
-        dueDate: now.add(const Duration(days: 1)),
-        definitionOfDone: 'Camera placement map aligned with auditorium stage flow.',
-        status: TaskStatus.blocked,
-        blocker: 'Awaiting finalized Stage Layout and Podium Position from Bhavya (Event Ops Lead).',
-        blockedByDepartment: DepartmentType.eventManagement,
-        corporateValueSkill: 'Broadcast Technical Direction',
-      ),
+  static String _shortDate(DateTime date) =>
+      '${date.day}/${date.month}';
 
-      // In Progress Tasks
-      ClubTask(
-        id: 'task-seed-6',
-        eventId: flagshipEvent.id,
-        title: 'Execute campus registration drive targeting 400 engineering & MBA students',
-        department: DepartmentType.marketing,
-        assigneeRole: ClubRole.marketingLead,
-        assigneeName: 'Anvitha',
-        creatorRole: ClubRole.vicePresident,
-        points: 8,
-        dueLabel: 'Friday',
-        dueDate: now.add(const Duration(days: 3)),
-        definitionOfDone: 'Registration tally reaches 350+ verified student ticket bookings.',
-        status: TaskStatus.inProgress,
-        corporateValueSkill: 'Growth Funnel & Acquisition',
-      ),
-      ClubTask(
-        id: 'task-seed-7',
-        eventId: flagshipEvent.id,
-        title: 'Coordinate VIP speaker transportation, green room & hospitality kits',
-        department: DepartmentType.publicRelations,
-        assigneeRole: ClubRole.clubMember,
-        assigneeName: 'Rhea Sen',
-        creatorRole: ClubRole.prLead,
-        points: 5,
-        dueLabel: 'In 4 days',
-        dueDate: now.add(const Duration(days: 4)),
-        definitionOfDone: 'Flight timings, hotel booking, and college vehicle passes confirmed.',
-        status: TaskStatus.inProgress,
-        corporateValueSkill: 'VIP Hospitality & Logistics',
-      ),
-      ClubTask(
-        id: 'task-seed-8',
-        eventId: flagshipEvent.id,
-        title: 'Procure 500 branded lanyards, delegate ID cards & QR scanners',
-        department: DepartmentType.eventManagement,
-        assigneeRole: ClubRole.eventManagementLead,
-        assigneeName: 'Bhavya',
-        creatorRole: ClubRole.vicePresident,
-        points: 8,
-        dueLabel: 'In 5 days',
-        dueDate: now.add(const Duration(days: 5)),
-        definitionOfDone: 'Delivery received at club room and quantity cross-checked.',
-        status: TaskStatus.committed,
-        corporateValueSkill: 'Vendor Procurement & Negotiation',
-      ),
-    ];
+  // --- Persistence --------------------------------------------------------
 
-    _members = [
-      const MemberProfile(
-        id: 'mem-cmo',
-        name: 'Mohammed Abdul Mudabbir',
-        role: ClubRole.gwdCmo,
-        department: DepartmentType.executive,
-        yearAndMajor: 'GWD Global · Chief Marketing Officer',
-        totalVerifiedPoints: 118,
-        reliabilityRate: 99.6,
-        badges: ['Brand Custodian', 'Global CMO', 'Youth Leadership Mentor'],
-        corporateSkillsEarned: {
-          'Global Brand Architecture': 48,
-          'Corporate Sponsorship Closures': 44,
-          'Creative Quality Audit': 40,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-ceo',
-        name: 'Mohd Abdul Rahman Pasha',
-        role: ClubRole.gwdCeo,
-        department: DepartmentType.executive,
-        yearAndMajor: 'GWD Global · CEO & Founder',
-        totalVerifiedPoints: 125,
-        reliabilityRate: 99.8,
-        badges: ['Company Founder', 'Global Club Supervisor', 'Corporate Mentor'],
-        corporateSkillsEarned: {
-          'Enterprise Governance': 50,
-          'Campus-to-Corporate Strategy': 45,
-          'Strategic Budget Allocation': 42,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-president',
-        name: 'Aldrin Paul',
-        role: ClubRole.president,
-        department: DepartmentType.executive,
-        yearAndMajor: '4th Year · President & Executive Lead',
-        totalVerifiedPoints: 78,
-        reliabilityRate: 98.6,
-        badges: ['Executive Leader', 'GWD Global Ambassador', 'Keynote Speaker'],
-        corporateSkillsEarned: {
-          'Executive Governance': 28,
-          'Strategic Budgeting': 22,
-          'Corporate Sponsorship Pitching': 28,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-vp',
-        name: 'Mohd Ismail',
-        role: ClubRole.vicePresident,
-        department: DepartmentType.executive,
-        yearAndMajor: '4th Year · Vice President & Operations Lead',
-        totalVerifiedPoints: 68,
-        reliabilityRate: 98.2,
-        badges: ['Operations Maestro', 'Cross-Functional Catalyst'],
-        corporateSkillsEarned: {
-          'Cross-functional Alignment': 36,
-          'Timeline Velocity': 28,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-gensec',
-        name: 'Sravya',
-        role: ClubRole.generalSecretary,
-        department: DepartmentType.executive,
-        yearAndMajor: '3rd Year · General Secretary & Governance',
-        totalVerifiedPoints: 56,
-        reliabilityRate: 97.0,
-        badges: ['Governance Master', 'Official Liaison', 'Dean Protocol'],
-        corporateSkillsEarned: {
-          'Institutional Clearance': 32,
-          'Statutory Documentation': 24,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-marketing',
-        name: 'Anvitha',
-        role: ClubRole.marketingLead,
-        department: DepartmentType.marketing,
-        yearAndMajor: '3rd Year · Marketing & Growth Lead',
-        totalVerifiedPoints: 62,
-        reliabilityRate: 96.8,
-        badges: ['Growth Hacker', 'Campus Viralist', 'Conversion Queen'],
-        corporateSkillsEarned: {
-          'Campaign ROI & Growth': 38,
-          'Audience Acquisition': 24,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-pr',
-        name: 'Tuba Azeem',
-        role: ClubRole.prLead,
-        department: DepartmentType.publicRelations,
-        yearAndMajor: '4th Year · PR & Corporate Relations Lead',
-        totalVerifiedPoints: 70,
-        reliabilityRate: 98.5,
-        badges: ['Sponsorship Closer', 'VIP Diplomat', 'MoU Specialist'],
-        corporateSkillsEarned: {
-          'Corporate Sponsorship Pitching': 42,
-          'Keynote Negotiation': 28,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-events',
-        name: 'Bhavya',
-        role: ClubRole.eventManagementLead,
-        department: DepartmentType.eventManagement,
-        yearAndMajor: '3rd Year · Event Management & Logistics Lead',
-        totalVerifiedPoints: 58,
-        reliabilityRate: 96.2,
-        badges: ['Logistics Commander', 'Run-of-Show Architect'],
-        corporateSkillsEarned: {
-          'Run-of-Show Protocol': 32,
-          'Crowd Engineering': 26,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-creative',
-        name: 'Nishta',
-        role: ClubRole.creativeLead,
-        department: DepartmentType.creative,
-        yearAndMajor: '3rd Year · Creative & Brand Lead',
-        totalVerifiedPoints: 64,
-        reliabilityRate: 97.5,
-        badges: ['Design Visionary', 'Keynote Stylist', 'Brand Maestro'],
-        corporateSkillsEarned: {
-          'Brand Design Systems': 36,
-          'Visual Storytelling & UI': 28,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-production',
-        name: 'Mohd Abdul Rahman Pasha (CEO - Temp)',
-        role: ClubRole.productionLead,
-        department: DepartmentType.production,
-        yearAndMajor: 'Production & AV Tech Lead (CEO - Temp)',
-        totalVerifiedPoints: 60,
-        reliabilityRate: 98.0,
-        badges: ['AV Virtuoso', 'Stage Tech Director'],
-        corporateSkillsEarned: {
-          'Stage AV Engineering': 35,
-          'Live Technical Setup': 25,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-cinema',
-        name: 'Burhan',
-        role: ClubRole.cinematographerLead,
-        department: DepartmentType.cinematography,
-        yearAndMajor: '3rd Year · Cinematographer & Media Lead',
-        totalVerifiedPoints: 66,
-        reliabilityRate: 98.0,
-        badges: ['Cinematic Visionary', 'Rapid Turnaround Pro'],
-        corporateSkillsEarned: {
-          'Commercial Video Production': 40,
-          'Aftermovie Storyboarding': 26,
-        },
-      ),
-      const MemberProfile(
-        id: 'mem-member',
-        name: 'Rhea Sen',
-        role: ClubRole.clubMember,
-        department: DepartmentType.publicRelations,
-        yearAndMajor: '2nd Year · Club Associate & Crew',
-        totalVerifiedPoints: 38,
-        reliabilityRate: 95.5,
-        badges: ['Rising PR Associate', 'Hospitality Star'],
-        corporateSkillsEarned: {
-          'VIP Hospitality & Logistics': 24,
-          'Corporate Outreach': 14,
-        },
-      ),
-    ];
+  /// Loads the saved workspace. Safe to call once at startup; if nothing has
+  /// been saved yet the seeded workspace stays in place.
+  Future<void> restore() async {
+    if (_restored) return;
+    _restored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-    _notifications.addAll([
-      '⚡ GWD TechConnect 2026 entered active countdown (16 days remaining)',
-      '🚨 Blocker flagged: Cinematographer needs Stage Layout from Event Ops',
-      '✨ AI Event Architect blueprint generated for Corporate GenAI Bootcamp',
-    ]);
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final data = jsonDecode(raw) as Map<String, dynamic>;
+        _events = (data['events'] as List)
+            .map((e) => ClubEvent.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        _tasks = (data['tasks'] as List)
+            .map((e) => ClubTask.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        _members = (data['members'] as List)
+            .map((e) =>
+                MemberProfile.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        _handoffs = (data['handoffs'] as List? ?? const [])
+            .map((e) => Handoff.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        _messages = (data['messages'] as List? ?? const [])
+            .map((e) =>
+                CollabMessage.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        _activity = (data['activity'] as List? ?? const [])
+            .map((e) =>
+                ActivityEvent.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+
+      final sessionId = prefs.getString(_sessionKey);
+      if (sessionId != null) {
+        _currentMember =
+            _members.where((m) => m.id == sessionId).firstOrNull ?? _currentMember;
+      }
+    } catch (error, stack) {
+      // A corrupt snapshot must never stop the app booting — fall back to seed.
+      debugPrint('Workspace restore failed, using seed data: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+    _latestAlert = null;
+    notifyListeners();
+  }
+
+  /// Wipes the saved snapshot and returns to the seeded workspace.
+  Future<void> resetWorkspace() async {
+    final seed = SeedWorkspace.build();
+    _events = List.of(seed.events);
+    _tasks = List.of(seed.tasks);
+    _members = List.of(seed.members);
+    _handoffs = List.of(seed.handoffs);
+    _messages = List.of(seed.messages);
+    _activity = List.of(seed.activity);
+    _currentMember = _members.where((m) => m.role == ClubRole.president).firstOrNull ??
+        _members.firstOrNull;
+    _latestAlert = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
+      await prefs.remove(_sessionKey);
+    } catch (_) {
+      // Storage is best-effort.
+    }
+    notifyListeners();
+  }
+
+  void _persist() {
+    // Writes are coalesced: a burst of mutations produces one disk write.
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 400), _writeSnapshot);
+  }
+
+  Future<void> _writeSnapshot() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = jsonEncode({
+        'events': _events.map((e) => e.toJson()).toList(),
+        'tasks': _tasks.map((e) => e.toJson()).toList(),
+        'members': _members.map((e) => e.toJson()).toList(),
+        'handoffs': _handoffs.map((e) => e.toJson()).toList(),
+        'messages': _messages.map((e) => e.toJson()).toList(),
+        'activity': _activity.map((e) => e.toJson()).toList(),
+      });
+      await prefs.setString(_storageKey, payload);
+    } catch (error) {
+      debugPrint('Workspace save failed: $error');
+    }
+  }
+
+  Future<void> _persistSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_currentMember == null) {
+        await prefs.remove(_sessionKey);
+      } else {
+        await prefs.setString(_sessionKey, _currentMember!.id);
+      }
+    } catch (error) {
+      debugPrint('Session save failed: $error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    super.dispose();
   }
 }
-
-class ClubLiveNotification {
-  const ClubLiveNotification({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.timestamp,
-    this.type = 'info',
-    this.actionLabel,
-  });
-
-  final String id;
-  final String title;
-  final String message;
-  final DateTime timestamp;
-  final String type; // 'verification', 'blocker', 'event', 'nudge', 'proof', 'role', 'info'
-  final String? actionLabel;
-}
-

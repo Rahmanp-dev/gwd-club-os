@@ -3,6 +3,8 @@ import '../../app/theme/gwd_theme.dart';
 import '../../core/models/club_role.dart';
 import '../../core/models/club_task.dart';
 import '../../core/models/department.dart';
+import '../../core/services/club_workspace_service.dart';
+import '../collaboration/task_thread.dart';
 
 class TaskDetailSheet extends StatefulWidget {
   const TaskDetailSheet({
@@ -14,10 +16,12 @@ class TaskDetailSheet extends StatefulWidget {
     required this.onReportBlocker,
     required this.onResolveBlocker,
     required this.onAcceptTask,
+    this.workspace,
   });
 
   final ClubTask task;
   final ClubRole viewerRole;
+  final ClubWorkspaceService? workspace;
   final void Function(String taskId, String proof) onSubmitProof;
   final void Function(String taskId, ClubRole verifierRole, String verifierName) onVerifyTask;
   final void Function(String taskId, String blockerReason, DepartmentType? blockedBy) onReportBlocker;
@@ -556,6 +560,16 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                         label: Text('Verify Outcome & Credit ${task.points} XP', style: const TextStyle(fontWeight: FontWeight.w800)),
                       ),
                     ),
+
+                  if (widget.workspace != null) ...[
+                    const SizedBox(height: 20),
+                    const Divider(height: 1, color: GwdColors.hairline),
+                    const SizedBox(height: 16),
+                    TaskThread(
+                      task: task,
+                      workspace: widget.workspace!,
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -203,7 +203,7 @@ class AiEventArchitectService {
         title: 'AV dry-run, wireless mic frequency sweep, and multi-display switcher setup in auditorium',
         department: DepartmentType.production,
         assigneeRole: ClubRole.productionLead,
-        assigneeName: 'Mohd Abdul Rahman Pasha (CEO - Temp)',
+        assigneeName: 'Rahman Pasha',
         creatorRole: ClubRole.vicePresident,
         points: 8,
         dueLabel: 'T-2 Days',
