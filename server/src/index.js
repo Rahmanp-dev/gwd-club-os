@@ -44,8 +44,20 @@ const founders = [
 
 app.use(cors({ origin: clientOrigin }));
 app.use(express.json({ limit: '1mb' }));
+const publicPath = path.join(__dirname, '../public');
 const webDistPath = path.join(__dirname, '../../build/web');
+app.use(express.static(publicPath));
 app.use(express.static(webDistPath));
+
+app.get('/api/health', (request, response) => {
+  response.json({
+    status: 'online',
+    service: 'GWD CLUB OS Cloud Gateway',
+    serverTime: new Date().toISOString(),
+    cloud: 'Render',
+    roles: Array.from(validRoles),
+  });
+});
 
 function workspaceRoom(id) {
   return `workspace:${id}`;
@@ -369,10 +381,14 @@ io.on('connection', (socket) => {
 });
 
 app.get('*', (request, response, next) => {
-  if (request.path.startsWith('/api') || request.path.startsWith('/health')) return next();
-  const indexPath = path.join(webDistPath, 'index.html');
-  response.sendFile(indexPath, (err) => {
-    if (err) next();
+  if (request.path.startsWith('/api') || request.path.startsWith('/socket.io')) return next();
+  const publicIndex = path.join(publicPath, 'index.html');
+  response.sendFile(publicIndex, (err) => {
+    if (!err) return;
+    const distIndex = path.join(webDistPath, 'index.html');
+    response.sendFile(distIndex, (err2) => {
+      if (err2) next();
+    });
   });
 });
 
