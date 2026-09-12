@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/models/club_event.dart';
 import '../../core/models/club_task.dart';
 import '../../core/models/department.dart';
@@ -278,12 +280,9 @@ class _ClubAppShellState extends State<ClubAppShell> {
     return SafeArea(
       child: Container(
         margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        height: 68,
+        height: 66,
         decoration: BoxDecoration(
-          color: GwdColors.obsidian,
-          borderRadius: BorderRadius.circular(34),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.16), width: 1.2),
+          borderRadius: BorderRadius.circular(33),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.55),
@@ -297,135 +296,195 @@ class _ClubAppShellState extends State<ClubAppShell> {
             ),
           ],
         ),
-        child: Row(
-          children: [
-            // Main Navigation Pill Items (Apple Style)
-            ...List.generate(items.length, (index) {
-              final item = items[index];
-              final isSelected = currentIndex == index;
-
-              return Expanded(
-                child: AppleBouncy(
-                  scaleFactor: 0.92,
-                  onTap: () => onSelect(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutBack,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? 8 : 4,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Colors.white.withValues(alpha: 0.25),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(
-                              isSelected ? item.activeIcon : item.icon,
-                              color: isSelected ? GwdColors.primaryRed : const Color(0xFF71717A),
-                              size: isSelected ? 20 : 19,
-                            ),
-                            if (item.badgeCount != null && item.badgeCount! > 0)
-                              Positioned(
-                                top: -3,
-                                right: -6,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: item.badgeColor ?? GwdColors.primaryRed,
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: (item.badgeColor ?? GwdColors.primaryRed).withValues(alpha: 0.6),
-                                        blurRadius: 4,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    '${item.badgeCount}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isSelected ? GwdColors.primaryRed : const Color(0xFF71717A),
-                            fontSize: 9.5,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-
-            // Vibrant AI Action Launcher Button (Matching reference image 2's standout emblem button)
-            AppleBouncy(
-              scaleFactor: 0.90,
-              onTap: _showAiGenerator,
-              child: Tooltip(
-                message: 'AI Event Architect (Coming Soon / In Dev)',
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  margin: const EdgeInsets.only(left: 4, right: 2),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        GwdColors.primaryRed,
-                        GwdColors.rubyDark,
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: GwdColors.primaryRed.withValues(alpha: 0.55),
-                        blurRadius: 14,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(33),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: GwdColors.obsidian.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(33),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1.2,
                 ),
               ),
+              child: Row(
+                children: [
+                  // Main Navigation Items with Fluid Apple-grade animations
+                  ...List.generate(items.length, (index) {
+                    final item = items[index];
+                    final isSelected = currentIndex == index;
+
+                    return Expanded(
+                      child: AppleBouncy(
+                        scaleFactor: 0.92,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onSelect(index);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white.withValues(alpha: 0.10)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedScale(
+                                scale: isSelected ? 1.15 : 1.0,
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutBack,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      isSelected ? item.activeIcon : item.icon,
+                                      color: isSelected
+                                          ? GwdColors.primaryRed
+                                          : const Color(0xFF94A3B8),
+                                      size: 20,
+                                    ),
+                                    if (item.badgeCount != null &&
+                                        item.badgeCount! > 0)
+                                      Positioned(
+                                        top: -3,
+                                        right: -6,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4.5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: item.badgeColor ??
+                                                GwdColors.primaryRed,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: (item.badgeColor ??
+                                                        GwdColors.primaryRed)
+                                                    .withValues(alpha: 0.6),
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            '${item.badgeCount}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOut,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF94A3B8),
+                                  fontSize: 9.5,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  letterSpacing: -0.2,
+                                ),
+                                child: Text(
+                                  item.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutBack,
+                                width: isSelected ? 14 : 0,
+                                height: 2.5,
+                                decoration: BoxDecoration(
+                                  color: GwdColors.primaryRed,
+                                  borderRadius: BorderRadius.circular(2),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: GwdColors.primaryRed
+                                                .withValues(alpha: 0.8),
+                                            blurRadius: 5,
+                                            spreadRadius: 0.5,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+
+                  // Standout AI Event Architect action launcher
+                  AppleBouncy(
+                    scaleFactor: 0.90,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _showAiGenerator();
+                    },
+                    child: Tooltip(
+                      message: 'AI Event Architect (Coming Soon / In Dev)',
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        margin: const EdgeInsets.only(left: 3, right: 2),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              GwdColors.primaryRed,
+                              GwdColors.rubyDark,
+                            ],
+                          ),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  GwdColors.primaryRed.withValues(alpha: 0.55),
+                              blurRadius: 14,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 19,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );

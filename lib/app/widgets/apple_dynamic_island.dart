@@ -134,20 +134,20 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
                     duration: const Duration(milliseconds: 320),
                     curve: Curves.easeOutCubic,
                     constraints: BoxConstraints(
-                      maxWidth: isExpanded ? 460 : 370,
-                      minHeight: isExpanded ? 58 : 42,
+                      maxWidth: isExpanded ? 440 : 210,
+                      minHeight: isExpanded ? 56 : 34,
                     ),
                     padding: EdgeInsets.symmetric(
-                      horizontal: isExpanded ? 14 : 12,
-                      vertical: isExpanded ? 8 : 6,
+                      horizontal: isExpanded ? 14 : 9,
+                      vertical: isExpanded ? 8 : 5,
                     ),
                     decoration: BoxDecoration(
                       color: GwdColors.obsidian,
-                      borderRadius: BorderRadius.circular(isExpanded ? 24 : 30),
+                      borderRadius: BorderRadius.circular(isExpanded ? 24 : 20),
                       border: Border.all(
                         color: isExpanded
                             ? GwdColors.primaryRed.withValues(alpha: 0.8)
-                            : Colors.white.withValues(alpha: 0.15),
+                            : Colors.white.withValues(alpha: 0.18),
                         width: isExpanded ? 1.5 : 1.0,
                       ),
                       boxShadow: [
@@ -225,11 +225,12 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Flexible(
                     child: Container(
                       padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: isBlocker
                             ? GwdColors.primaryRed
@@ -242,20 +243,24 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: isBlocker ? Colors.white : GwdColors.primaryRed,
-                          fontSize: 9.5,
+                          fontSize: 9,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.4,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Tap to dismiss',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 4),
+                  const Flexible(
+                    child: Text(
+                      'Dismiss',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -289,11 +294,11 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
       children: [
         // Tiny Club Logo Squircle
         Container(
-          width: 24,
-          height: 24,
+          width: 20,
+          height: 20,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(6),
           ),
           padding: const EdgeInsets.all(2),
           child: Image.asset(
@@ -301,12 +306,12 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Icon(
               Icons.bolt_rounded,
-              size: 14,
+              size: 12,
               color: GwdColors.primaryRed,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 7),
         // Live Radar Dot with Pulse
         Container(
           width: 6,
@@ -328,39 +333,24 @@ class _AppleDynamicIslandState extends State<AppleDynamicIsland>
             ],
           ),
         ),
-        const SizedBox(width: 7),
-        // Brand Title
-        const Text(
-          'GWD RADAR',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Container(
-          width: 3,
-          height: 3,
-          decoration: const BoxDecoration(
-            color: Colors.white38,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
         // Live Stat Tag
-        Text(
-          blockedCount > 0
-              ? '$blockedCount Blockers'
-              : '$verifiedTasks/$totalTasks Done',
-          style: TextStyle(
-            color: blockedCount > 0 ? GwdColors.accentCoral : Colors.white70,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
+        Flexible(
+          child: Text(
+            blockedCount > 0
+                ? '$blockedCount Blockers'
+                : '$verifiedTasks/$totalTasks Live',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: blockedCount > 0 ? GwdColors.accentCoral : Colors.white,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 3),
         const Icon(
           Icons.chevron_right_rounded,
           size: 13,

@@ -109,7 +109,7 @@ class _TasksBoardPageState extends State<TasksBoardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 54, 20, 8),
               child: Row(
                 children: [
                   const Expanded(
@@ -318,102 +318,117 @@ class _TasksBoardPageState extends State<TasksBoardPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: task.department.color
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          task.department.shortName
-                                              .toUpperCase(),
-                                          style: TextStyle(
-                                            color: task.department.color,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: task.status.color
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          task.status.label.toUpperCase(),
-                                          style: TextStyle(
-                                            color: task.status.color,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 7, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF1F5F9),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '${task.points} PTS',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w800,
-                                            color: GwdColors.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    task.title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      color: GwdColors.textPrimary,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.person_outline,
-                                          size: 14,
-                                          color: GwdColors.textSecondary),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${task.assigneeName} (${task.assigneeRole.shortBadge})',
-                                        style: const TextStyle(
-                                            color: GwdColors.textSecondary,
-                                            fontSize: 12),
-                                      ),
-                                      const Spacer(),
-                                      const Icon(Icons.schedule,
-                                          size: 14,
-                                          color: GwdColors.textSecondary),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        task.dueLabel,
-                                        style: const TextStyle(
-                                            color: GwdColors.textSecondary,
-                                            fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
+                                   Row(
+                                     children: [
+                                       Flexible(
+                                         child: Row(
+                                           mainAxisSize: MainAxisSize.min,
+                                           children: [
+                                             Container(
+                                               padding: const EdgeInsets.symmetric(
+                                                   horizontal: 7, vertical: 3.5),
+                                               decoration: BoxDecoration(
+                                                 color: task.department.color
+                                                     .withValues(alpha: 0.12),
+                                                 borderRadius:
+                                                     BorderRadius.circular(8),
+                                               ),
+                                               child: Text(
+                                                 task.department.shortName
+                                                     .toUpperCase(),
+                                                 style: TextStyle(
+                                                   color: task.department.color,
+                                                   fontSize: 9.5,
+                                                   fontWeight: FontWeight.w800,
+                                                 ),
+                                               ),
+                                             ),
+                                             const SizedBox(width: 6),
+                                             Flexible(
+                                               child: Container(
+                                                 padding: const EdgeInsets.symmetric(
+                                                     horizontal: 7, vertical: 3.5),
+                                                 decoration: BoxDecoration(
+                                                   color: task.status.color
+                                                       .withValues(alpha: 0.12),
+                                                   borderRadius:
+                                                       BorderRadius.circular(8),
+                                                 ),
+                                                 child: Text(
+                                                   task.status.label.toUpperCase(),
+                                                   style: TextStyle(
+                                                     color: task.status.color,
+                                                     fontSize: 9.5,
+                                                     fontWeight: FontWeight.w800,
+                                                   ),
+                                                   maxLines: 1,
+                                                   overflow: TextOverflow.ellipsis,
+                                                 ),
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                       const SizedBox(width: 8),
+                                       Container(
+                                         padding: const EdgeInsets.symmetric(
+                                             horizontal: 7, vertical: 3),
+                                         decoration: BoxDecoration(
+                                           color: const Color(0xFFF1F5F9),
+                                           borderRadius:
+                                               BorderRadius.circular(6),
+                                         ),
+                                         child: Text(
+                                           '${task.points} PTS',
+                                           style: const TextStyle(
+                                             fontSize: 10.5,
+                                             fontWeight: FontWeight.w800,
+                                             color: GwdColors.textPrimary,
+                                           ),
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                   const SizedBox(height: 10),
+                                   Text(
+                                     task.title,
+                                     style: const TextStyle(
+                                       fontWeight: FontWeight.w700,
+                                       fontSize: 14,
+                                       color: GwdColors.textPrimary,
+                                       height: 1.3,
+                                     ),
+                                   ),
+                                   const SizedBox(height: 8),
+                                   Row(
+                                     children: [
+                                       const Icon(Icons.person_outline,
+                                           size: 14,
+                                           color: GwdColors.textSecondary),
+                                       const SizedBox(width: 4),
+                                       Expanded(
+                                         child: Text(
+                                           '${task.assigneeName} (${task.assigneeRole.shortBadge})',
+                                           style: const TextStyle(
+                                               color: GwdColors.textSecondary,
+                                               fontSize: 11.5),
+                                           maxLines: 1,
+                                           overflow: TextOverflow.ellipsis,
+                                         ),
+                                       ),
+                                       const SizedBox(width: 8),
+                                       const Icon(Icons.schedule,
+                                           size: 13,
+                                           color: GwdColors.textSecondary),
+                                       const SizedBox(width: 4),
+                                       Text(
+                                         task.dueLabel,
+                                         style: const TextStyle(
+                                             color: GwdColors.textSecondary,
+                                             fontSize: 11.5),
+                                       ),
+                                     ],
+                                   ),
                                   if (task.blocker != null) ...[
                                     const SizedBox(height: 10),
                                     Container(

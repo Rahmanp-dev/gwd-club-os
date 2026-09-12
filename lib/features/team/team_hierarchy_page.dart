@@ -29,7 +29,7 @@ class TeamHierarchyPage extends StatelessWidget {
       backgroundColor: GwdColors.canvasLight,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 80),
+          padding: const EdgeInsets.fromLTRB(20, 54, 20, 100),
           children: [
             Container(
               padding: const EdgeInsets.all(18),

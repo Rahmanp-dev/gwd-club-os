@@ -102,32 +102,38 @@ class RoleTailoredCockpit extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEAB308).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFEAB308)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.shield, color: Color(0xFFEAB308), size: 14),
-                        SizedBox(width: 5),
-                        Text(
-                          'GWD GLOBAL HQ · CHAPTER SUPERVISION',
-                          style: TextStyle(
-                            color: Color(0xFFEAB308),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
+                  Flexible(
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAB308).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFEAB308)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield, color: Color(0xFFEAB308), size: 14),
+                          SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              'GWD GLOBAL HQ · CHAPTER SUPERVISION',
+                              style: TextStyle(
+                                color: Color(0xFFEAB308),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -145,7 +151,7 @@ class RoleTailoredCockpit extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Campus-to-Corporate Oversight',
+                'Presidential & Global Directive Suite',
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -161,14 +167,20 @@ class RoleTailoredCockpit extends StatelessWidget {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  _buildMetricTile(
-                      'Readiness Index', '98.4%', const Color(0xFFEAB308)),
-                  const SizedBox(width: 10),
-                  _buildMetricTile('Deliverables Done',
-                      '$totalVerified / ${tasks.length}', GwdColors.emerald),
-                  const SizedBox(width: 10),
-                  _buildMetricTile('Pending Audit',
-                      '${pendingApprovals.length}', const Color(0xFF38BDF8)),
+                  Expanded(
+                    child: _buildMetricTile(
+                        'Readiness Index', '98.4%', const Color(0xFFEAB308)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildMetricTile('Deliverables Done',
+                        '$totalVerified / ${tasks.length}', GwdColors.emerald),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildMetricTile('Pending Audit',
+                        '${pendingApprovals.length}', const Color(0xFF38BDF8)),
+                  ),
                 ],
               ),
             ],
@@ -304,25 +316,29 @@ class RoleTailoredCockpit extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                    decoration: BoxDecoration(
-                      color: const Color(0x33DC2626),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: GwdColors.primaryRed),
-                    ),
-                    child: const Text(
-                      'GWD GLOBAL CMO · EXECUTIVE BRAND SUITE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
+                  Expanded(
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0x33DC2626),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: GwdColors.primaryRed),
+                      ),
+                      child: const Text(
+                        'GWD GLOBAL CMO · EXECUTIVE BRAND SUITE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -371,14 +387,20 @@ class RoleTailoredCockpit extends StatelessWidget {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  _buildMetricTile(
-                      'Campus Reach', '28.4K', GwdColors.primaryRed),
-                  const SizedBox(width: 10),
-                  _buildMetricTile(
-                      'Confirmed RSVPs', '1,450', GwdColors.emerald),
-                  const SizedBox(width: 10),
-                  _buildMetricTile(
-                      'Brand Quality', '10/10', const Color(0xFFFBBF24)),
+                  Expanded(
+                    child: _buildMetricTile(
+                        'Campus Reach', '28.4K', GwdColors.primaryRed),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildMetricTile(
+                        'Confirmed RSVPs', '1,450', GwdColors.emerald),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildMetricTile(
+                        'Brand Quality', '10/10', const Color(0xFFFBBF24)),
+                  ),
                 ],
               ),
             ],
@@ -484,15 +506,19 @@ class RoleTailoredCockpit extends StatelessWidget {
                   const Icon(Icons.monetization_on_outlined,
                       color: GwdColors.emerald, size: 20),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Active Corporate Brand Deals',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: GwdColors.obsidian,
+                  const Expanded(
+                    child: Text(
+                      'Active Corporate Brand Deals',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: GwdColors.obsidian,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
@@ -715,15 +741,19 @@ class RoleTailoredCockpit extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  '${task.assigneeName} (${task.assigneeRole.shortBadge})',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: GwdColors.textSecondary,
+                Expanded(
+                  child: Text(
+                    '${task.assigneeName} (${task.assigneeRole.shortBadge})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: GwdColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 Text(
                   '+${task.points} XP',
                   style: const TextStyle(
@@ -1929,14 +1959,18 @@ class RoleTailoredCockpit extends StatelessWidget {
                           fontWeight: FontWeight.w900)),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  task.department.displayName,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: GwdColors.textSecondary),
+                Expanded(
+                  child: Text(
+                    task.department.displayName,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: GwdColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 Text('${task.points} XP',
                     style: const TextStyle(
                         fontWeight: FontWeight.w800, fontSize: 12)),

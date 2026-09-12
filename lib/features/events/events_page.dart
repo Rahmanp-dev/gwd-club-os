@@ -75,7 +75,7 @@ class _EventsPageState extends State<EventsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 54, 20, 8),
               child: Row(
                 children: [
                   const Expanded(
@@ -321,7 +321,7 @@ class _EventsPageState extends State<EventsPage> {
                                     style: const TextStyle(
                                         fontSize: 11,
                                         color: GwdColors.textSecondary)),
-                                const Spacer(),
+                                const SizedBox(width: 12),
                                 const Icon(Icons.location_on_outlined,
                                     size: 13, color: GwdColors.textMuted),
                                 const SizedBox(width: 4),

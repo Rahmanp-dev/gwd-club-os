@@ -121,7 +121,7 @@ class _DashboardPageState extends State<DashboardPage> {
           onRefresh: () async =>
               Future.delayed(const Duration(milliseconds: 300)),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 90),
+            padding: const EdgeInsets.fromLTRB(20, 54, 20, 100),
             children: [
               // Top Brand Lockup & Role Switcher
               Row(
@@ -130,11 +130,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     scaleFactor: 0.90,
                     onTap: onOpenPersonaPortal,
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(13),
                         border: Border.all(color: GwdColors.line, width: 1.2),
                         boxShadow: [
                           BoxShadow(
@@ -156,61 +156,72 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'GWD CLUB OS',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: GwdColors.obsidian,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: GwdColors.rubyLight,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'GET WORK DONE',
-                              style: TextStyle(
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w900,
-                                color: GwdColors.primaryRed,
-                                letterSpacing: 0.5,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'GWD CLUB OS',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                  color: GwdColors.obsidian,
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const Text(
-                        'Campus to Corporate · Club Supervision',
-                        style: TextStyle(
-                          color: GwdColors.textSecondary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w500,
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: GwdColors.rubyLight,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'HQ',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: GwdColors.primaryRed,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Campus to Corporate · Club Supervision',
+                          style: TextStyle(
+                            color: GwdColors.textSecondary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   // Interactive Role Switcher dropdown
                   AppleBouncy(
                     scaleFactor: 0.95,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: GwdColors.line),
                         boxShadow: [
                           BoxShadow(
@@ -223,8 +234,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<ClubRole>(
                           value: activeRole,
+                          isDense: true,
                           icon: const Icon(Icons.keyboard_arrow_down,
-                              size: 18, color: GwdColors.textSecondary),
+                              size: 16, color: GwdColors.textSecondary),
                           items: ClubRole.values.map((role) {
                             return DropdownMenuItem(
                               value: role,
@@ -232,13 +244,13 @@ class _DashboardPageState extends State<DashboardPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   CircleAvatar(
-                                    radius: 10,
+                                    radius: 9,
                                     backgroundColor:
                                         role.color.withValues(alpha: 0.2),
                                     child: Icon(role.icon,
-                                        size: 11, color: role.color),
+                                        size: 10, color: role.color),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 5),
                                   Text(
                                     role.shortBadge,
                                     style: TextStyle(
@@ -259,33 +271,33 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   if (onOpenPersonaPortal != null) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     AppleBouncy(
                       scaleFactor: 0.90,
                       onTap: onOpenPersonaPortal,
                       child: Container(
-                        padding: const EdgeInsets.all(9),
+                        padding: const EdgeInsets.all(7.5),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: GwdColors.line),
                         ),
                         child: const Icon(Icons.people_outline,
-                            size: 18, color: GwdColors.textPrimary),
+                            size: 17, color: GwdColors.textPrimary),
                       ),
                     ),
                   ],
                   if (widget.onOpenLandingPage != null) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     AppleBouncy(
                       scaleFactor: 0.90,
                       onTap: widget.onOpenLandingPage,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
+                            horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
                           color: GwdColors.rubyLight,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                               color: GwdColors.primaryRed.withValues(alpha: 0.3)),
                         ),
@@ -294,12 +306,12 @@ class _DashboardPageState extends State<DashboardPage> {
                           children: [
                             Icon(Icons.public,
                                 size: 14, color: GwdColors.primaryRed),
-                            SizedBox(width: 4),
+                            SizedBox(width: 3),
                             Text(
                               'Web',
                               style: TextStyle(
                                 color: GwdColors.primaryRed,
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),

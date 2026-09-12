@@ -320,11 +320,15 @@ class HeroTeamConstellation extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Accountability Metrics',
-                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
+                    const Expanded(
+                      child: Text(
+                        'Accountability Metrics',
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     const Icon(Icons.tune, color: GwdColors.textSecondary, size: 16),
                   ],
                 ),

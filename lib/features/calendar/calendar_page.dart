@@ -48,7 +48,7 @@ class _CalendarPageState extends State<CalendarPage> {
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 90),
+          padding: const EdgeInsets.fromLTRB(20, 54, 20, 100),
           children: [
             // Top Apple SF Header with Search and Plus
             Row(
