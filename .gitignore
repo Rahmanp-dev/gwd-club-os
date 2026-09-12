@@ -1,0 +1,22 @@
+.dart_tool/
+.idea/
+.vscode/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+server/.env
+server/node_modules/
+server/npm-debug.log*
+android/.gradle/
+android/local.properties
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+
+# Android build outputs & APKs (GitHub 100MB limit)
+*.apk
+*.aab
+apk/
+server/public/*.apk
+server/public/gwd-club-os.apk
