@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/apple_motion.dart';
 import '../../app/theme/gwd_theme.dart';
 import '../../core/models/club_role.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Cool Apple-grade Web Landing Page Concept
 /// Tailored for iPhone (Safari) and Desktop web visitors:
@@ -353,7 +354,7 @@ class ClubWebLandingPage extends StatelessWidget {
     );
   }
 
-  void _triggerApkDownload(BuildContext context) {
+  Future<void> _triggerApkDownload(BuildContext context) async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Row(
@@ -373,6 +374,16 @@ class ClubWebLandingPage extends StatelessWidget {
         duration: Duration(seconds: 4),
       ),
     );
+
+    final uri = Uri.parse('/gwd-club-os.apk');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Fallback for web environments without popups
+      try {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (_) {}
+    }
   }
 
   Widget _buildMetricsTicker(BuildContext context) {
