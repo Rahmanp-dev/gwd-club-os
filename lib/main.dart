@@ -36,7 +36,7 @@ class _GwdClubAppState extends State<GwdClubApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GWD Club OS · Campus to Corporate',
+      title: 'GWD CLUB OS',
       debugShowCheckedModeBanner: false,
       theme: GwdTheme.light(),
       darkTheme: GwdTheme.dark(),

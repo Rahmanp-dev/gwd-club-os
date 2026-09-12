@@ -94782,7 +94782,7 @@ s.J$=0
 this.ap()},
 E(a){var s=A.ry(B.ET,B.aE,B.i,B.HA,B.Q,B.bs,!0),r=A.ry(B.EU,B.aN,B.dO,B.Hz,B.hk,B.v,!0),q=this.d
 q===$&&A.a()
-return new A.B6(new A.z_(q,null),"GWD Club OS \xb7 Campus to Corporate",s,r,B.aaz,!1,null)}}
+return new A.B6(new A.z_(q,null),"GWD CLUB OS",s,r,B.aaz,!1,null)}}
 A.acM.prototype={}
 A.aib.prototype={}
 A.aia.prototype={}
