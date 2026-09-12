@@ -152,6 +152,7 @@ class _ClubAppShellState extends State<ClubAppShell> {
 
         final screens = [
           DashboardPage(
+            workspaceService: service,
             activeRole: service.activeRole,
             events: service.events,
             tasks: service.tasks,

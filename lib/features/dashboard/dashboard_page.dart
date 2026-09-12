@@ -6,6 +6,7 @@ import '../../core/models/club_role.dart';
 import '../../core/models/club_task.dart';
 import '../../core/models/department.dart';
 import '../../core/models/member_profile.dart';
+import '../../core/services/club_workspace_service.dart';
 import 'widgets/action_stream_card.dart';
 import 'widgets/blocker_radar_card.dart';
 import 'widgets/department_interconnect_card.dart';
@@ -18,6 +19,7 @@ import 'widgets/war_room_matrix_card.dart';
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     super.key,
+    this.workspaceService,
     required this.activeRole,
     required this.events,
     required this.tasks,
@@ -38,6 +40,7 @@ class DashboardPage extends StatefulWidget {
     this.onOpenLandingPage,
   });
 
+  final ClubWorkspaceService? workspaceService;
   final ClubRole activeRole;
   final List<ClubEvent> events;
   final List<ClubTask> tasks;
@@ -193,6 +196,56 @@ class _DashboardPageState extends State<DashboardPage> {
                                   fontWeight: FontWeight.w900,
                                   color: GwdColors.primaryRed,
                                   letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            AppleBouncy(
+                              scaleFactor: 0.92,
+                              onTap: () => _showCloudSheet(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (widget.workspaceService?.isCloudConnected ?? false)
+                                      ? const Color(0xFFE6F4EA)
+                                      : const Color(0xFFF1F3F4),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: (widget.workspaceService?.isCloudConnected ?? false)
+                                        ? const Color(0xFF34A853).withValues(alpha: 0.4)
+                                        : const Color(0xFFBDC1C6),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 5,
+                                      height: 5,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: (widget.workspaceService?.isCloudConnected ?? false)
+                                            ? const Color(0xFF1E8E3E)
+                                            : const Color(0xFF80868B),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3.5),
+                                    Text(
+                                      (widget.workspaceService?.isCloudConnected ?? false)
+                                          ? 'CLOUD'
+                                          : 'LOCAL',
+                                      style: TextStyle(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: (widget.workspaceService?.isCloudConnected ?? false)
+                                            ? const Color(0xFF137333)
+                                            : const Color(0xFF5F6368),
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -785,6 +838,222 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showCloudSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final ws = widget.workspaceService;
+            final isConnected = ws?.isCloudConnected ?? false;
+            final isChecking = ws?.isCheckingCloud ?? false;
+            final latency = ws?.cloudLatency ?? (isConnected ? '< 300 ms' : 'Offline');
+            final cloudUrl = ws?.cloudUrl ?? ClubWorkspaceService.defaultCloudUrl;
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x1A000000),
+                    blurRadius: 30,
+                    offset: Offset(0, -6),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E0E0),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isConnected
+                                ? const Color(0xFFE6F4EA)
+                                : const Color(0xFFFFF0F0),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isConnected
+                                ? Icons.cloud_done_rounded
+                                : Icons.cloud_off_rounded,
+                            color: isConnected
+                                ? const Color(0xFF137333)
+                                : GwdColors.primaryRed,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isConnected
+                                    ? 'Cloud Sync Online'
+                                    : 'Cloud Gateway Standby',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: GwdColors.obsidian,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isConnected
+                                    ? 'Connected to Render & MongoDB Atlas'
+                                    : 'Using local resilient storage',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: GwdColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: GwdColors.canvasLight,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: GwdColors.line),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildCloudInfoRow('Live Endpoint', cloudUrl),
+                          const Divider(height: 16, color: GwdColors.line),
+                          _buildCloudInfoRow(
+                              'Database', 'MongoDB Atlas (mehnat_founder_os)'),
+                          const Divider(height: 16, color: GwdColors.line),
+                          _buildCloudInfoRow('Round-Trip Ping', latency),
+                          const Divider(height: 16, color: GwdColors.line),
+                          _buildCloudInfoRow(
+                            'Status',
+                            isConnected
+                                ? '● Synchronized'
+                                : '○ Standby (Cold Wake)',
+                            statusColor: isConnected
+                                ? const Color(0xFF137333)
+                                : const Color(0xFFB06000),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Render free-tier instances sleep when inactive. The first connection after sleep takes ~30s to wake up, but all your work is always preserved locally.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: GwdColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: AppleBouncy(
+                        scaleFactor: 0.96,
+                        onTap: isChecking
+                            ? null
+                            : () async {
+                                setModalState(() {});
+                                await ws?.checkCloudHealth();
+                                setModalState(() {});
+                              },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isChecking
+                                ? const Color(0xFFCCCCCC)
+                                : GwdColors.obsidian,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: isChecking
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Ping Cloud Gateway',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCloudInfoRow(String label, String value, {Color? statusColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: GwdColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: statusColor ?? GwdColors.obsidian,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
     );
   }
 }

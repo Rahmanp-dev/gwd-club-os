@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/club_event.dart';
@@ -44,6 +45,7 @@ class ClubWorkspaceService extends ChangeNotifier {
 
   static const _storageKey = 'gwd_club_os_workspace_v2';
   static const _sessionKey = 'gwd_club_os_session_v2';
+  static const String defaultCloudUrl = 'https://gwd-club-os.onrender.com';
 
   late List<ClubEvent> _events;
   late List<ClubTask> _tasks;
@@ -56,6 +58,51 @@ class ClubWorkspaceService extends ChangeNotifier {
   ActivityEvent? _latestAlert;
   bool _restored = false;
   Timer? _saveDebounce;
+
+  // Cloud Gateway Status
+  String _cloudUrl = defaultCloudUrl;
+  bool _isCloudConnected = false;
+  bool _isCheckingCloud = false;
+  String? _cloudLatency;
+  DateTime? _lastCloudSync;
+
+  String get cloudUrl => _cloudUrl;
+  bool get isCloudConnected => _isCloudConnected;
+  bool get isCheckingCloud => _isCheckingCloud;
+  String? get cloudLatency => _cloudLatency;
+  DateTime? get lastCloudSync => _lastCloudSync;
+
+  Future<bool> checkCloudHealth() async {
+    _isCheckingCloud = true;
+    notifyListeners();
+    final stopwatch = Stopwatch()..start();
+    try {
+      final response = await http
+          .get(Uri.parse('$_cloudUrl/api/health'))
+          .timeout(const Duration(seconds: 4));
+      stopwatch.stop();
+      if (response.statusCode == 200) {
+        _isCloudConnected = true;
+        _cloudLatency = '${stopwatch.elapsedMilliseconds} ms';
+        _lastCloudSync = DateTime.now();
+        _isCheckingCloud = false;
+        notifyListeners();
+        return true;
+      }
+    } catch (error) {
+      debugPrint('Cloud health check: server offline or cold wake: $error');
+    }
+    _isCloudConnected = false;
+    _isCheckingCloud = false;
+    notifyListeners();
+    return false;
+  }
+
+  void setCloudUrl(String url) {
+    if (url.trim().isEmpty) return;
+    _cloudUrl = url.trim();
+    checkCloudHealth();
+  }
 
   // --- Identity -----------------------------------------------------------
 
@@ -793,6 +840,7 @@ class ClubWorkspaceService extends ChangeNotifier {
     }
     _latestAlert = null;
     notifyListeners();
+    unawaited(checkCloudHealth());
   }
 
   /// Wipes the saved snapshot and returns to the seeded workspace.
